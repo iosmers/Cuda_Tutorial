@@ -10,21 +10,78 @@
 - 关键语法：`__global__`、`__device__`、`<<<grid, block>>>`
 - 内存管理：`cudaMalloc` / `cudaMemcpy` / `cudaFree`
 - 线程索引：`int i = blockIdx.x * blockDim.x + threadIdx.x;`
+- CUDA Kernel调用格式
+```
+kernelName<<<gridDim, blockDim, sharedMem, stream>>> 
+```
+| 参数          | 类型             | 是否必须 | 默认值          | 含义 |
+|---------------|------------------|----------|-----------------|------|
+| **GridDim**   | `dim3` / `int`   | 必须     | -               | Grid 中 Block 的数量（网格维度） |
+| **BlockDim**  | `dim3` / `int`   | 必须     | -               | 每个 Block 中线程的数量（线程块维度） |
+| **SharedMem** | `size_t`         | 可选     | 0               | 动态共享内存大小（字节） |
+| **Stream**    | `cudaStream_t`   | 可选     | 0（默认流）     | 在哪个 CUDA Stream 上执行 |
 
 ### 代码练习
-1. **Hello World from GPU**：熟悉 kernel 启动语法
-
+1. 向量加法:  `C = A + B`（N=1<<20)
     ```cpp
-    __global__ void hello() {
-        printf("Hello from thread %d, block %d\n", threadIdx.x, blockIdx.x);
+    // GPU版本
+    __global__ void vectorAdd(const float* A, const float* B, float* C, int N){
+      int i = blockIdx.x * blockDim.x threadId.x 
+      if(i<N){
+        C[i] = A[i] + B[i];
+      }
     }
-    int main() { hello<<<2,4>>>(); cudaDeviceSynchronize(); }
+    int main() { 
+      int threadsPerBlock = 256;
+      int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+      vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+    }
     ```
 
-2. **向量加法** `C = A + B`（N=1<<20），对比 CPU 版本
-3. **SAXPY**：`y = a*x + y`
-4. **矩阵加法**（2D grid/block）
-
+2. 矩阵加法（2D grid/block）
+- 用1维块去构建
+  ``` 
+  __global__ void MatMul(float A[M][K], float B[K][N], float C[M][N]){
+    int row = blockIdx.y *  blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if(row < M && col < N){
+      float sum = 0.0f;
+      for(int i = 0; i < K; i++){
+        sum += A[row][i] * B[i][col];
+      }
+      C[row][col] = sum;
+    }
+  }
+  dim3 threadsPerBlock(16, 16);
+  dim3 blocksPerGrid((N+15)/16, (M+15)/16);
+  MatMul<<<blocksPerGrid, threadsPerBlock>>>(A,B,C, M, N, K);
+  ```
+- 用2维块去构建
+  ```
+  __global__ void MatMul(const float* A, const float* B, float* C, int M, int N, int K){
+    // 线程索引，行业惯例，x轴是水平方向，是列，y轴是垂直方向，是行
+    int row = blockIdx.y *  blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if(row < M && col < N){
+      float sum = 0.0f;
+      for(int i = 0; i < K; i++){
+        sum += A[row*K+i] * B[i*N+col];
+      }
+      C[row][col] = sum;
+    }
+  }
+  ```
+```
+1 先定索引公式（先定映射规则）
+       ↓
+2 设定 threadsPerBlock( x , y )
+       ↓
+3 按 M、N 向上取整算 blocksPerGrid(x,y)
+       ↓
+4 核函数内用 i,j 做计算 + 边界判断
+       ↓
+5 <<<blocksPerGrid, threadsPerBlock>>> 启动
+```
 ### 阶段产出
 GitHub 仓库搭建，整理以上 4 个示例 + README。
 

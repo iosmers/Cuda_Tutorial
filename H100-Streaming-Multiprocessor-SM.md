@@ -33,9 +33,9 @@
 
 | 层级 | 英文全称 | 图中数量 | 职责 |
 |------|----------|----------|------|
-| **GPC** | Graphics Processing Cluster | **8** | 一大块计算集群，内含多个 TPC，共享片内互连 |
+| **GPC** | Graphics Processing Cluster | **8** | 一大块计算集群，内含9个 TPC,18个SM，共享片内互连 |
 | **TPC** | Texture Processing Cluster | **72**（8×9） | 纹理相关管线 + **2 个 SM** 的组合单元 |
-| **SM** | Streaming Multiprocessor | **144**（72×2） | 真正执行 CUDA 线程的单元（见本文第 2 节起） |
+| **SM** | Streaming Multiprocessor | **144**（8*18） | 真正执行 CUDA 线程的单元（见本文第 2 节起） |
 
 ```
 GPC（×8）
@@ -45,7 +45,7 @@ GPC（×8）
 
 **笔记**：TPC 名字来自图形学时代的「纹理处理集群」，但在 CUDA 语境下，你只需记住——**SM 才是算力与 Block 调度的基本单位**，TPC/GPC 是物理分组。
 
-**SKU 差异**：图 1 画满 **144 SM** 代表 GH100 完整 die 规模；市售 H100 SXM5 等型号通常**启用约 132 SM**（其余为良率预留或未熔丝），PCIe 版可能更少。用 `cudaGetDeviceProperties` 的 `multiProcessorCount` 以实卡为准。
+**SKU（型号） 差异**：图 1 画满 **144 SM** 代表 GH100 完整 die 规模；市售 H100 SXM5 等型号通常**启用约 132 SM**（其余为良率预留或未熔丝），PCIe 版可能更少。用 `cudaGetDeviceProperties` 的 `multiProcessorCount` 以实卡为准。
 
 ### 1.2 片外与片内存储
 
@@ -58,9 +58,9 @@ GPC（×8）
 **访存路径（简化）**：
 
 ```
-SM 内寄存器 / Shared Memory
+SM 内寄存器 
         ↕
-SM 内 L1 Data Cache
+SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K的统一内存池，SRAM, 这256K可以按照比例配置为L1 Cache和Shared Memory, 但是L1 Cache是由硬件自动管理的， Shared Memory则需要程序员手动管理, 查找时先找Shared Memory， 再找L1 Cache)
         ↕
       L2 Cache（整卡共享，容量约 50 MB 级，依 SKU）
         ↕

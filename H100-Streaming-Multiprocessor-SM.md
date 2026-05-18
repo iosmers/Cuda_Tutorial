@@ -40,10 +40,10 @@
 ```
 GPC（×8）
  └── TPC（每 GPC ×9，共 72）
-      └── SM（每 TPC ×2，共 144）  ← 与 CUDA Block 调度目标对应
+      └── SM（每 TPC ×2，共 144）  ← 与 CUDA **线程块**的调度目标对应
 ```
 
-**笔记**：TPC 名字来自图形学时代的「纹理处理集群」，但在 CUDA 语境下，你只需记住——**SM 才是算力与 Block 调度的基本单位**，TPC/GPC 是物理分组。
+**笔记**：TPC 名字来自图形学时代的「纹理处理集群」，但在 CUDA 语境下，你只需记住——**SM 才是算力与线程块调度的基本单位**，TPC/GPC 是物理分组。
 
 **SKU（型号） 差异**：图 1 画满 **144 SM** 代表 GH100 完整 die 规模；市售 H100 SXM5 等型号通常**启用约 132 SM**（其余为良率预留或未熔丝），PCIe 版可能更少。用 `cudaGetDeviceProperties` 的 `multiProcessorCount` 以实卡为准。
 
@@ -74,7 +74,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 | 组件 | 说明 |
 |------|------|
 | **PCIe 5.0 Host Interface** | GPU 与 CPU/主板之间的主通道；`cudaMemcpy` H↔D、kernel 启动命令经此下发 |
-| **GigaThread Engine** | 全局线程块调度器：把 Grid 中的 **Block 分配到各 SM** |
+| **GigaThread Engine** | 全局线程块调度器：把 Grid 中的**线程块**分配到各 SM |
 | **MIG Control** | **Multi-Instance GPU**：把一张物理卡切成多个独立 GPU 实例（不同租户/任务隔离） |
 | **High-Speed Hub & NVLink** | 底部 **18 路 NVLink**，用于多卡直连、高带宽 P2P，训练集群常见 8×H100 NVSwitch 拓扑 |
 
@@ -84,7 +84,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ```
 1. Host 通过 PCIe 提交 kernel<<<grid, block>>> 及参数
-2. GigaThread Engine 把 Grid 拆成多个 Block，投入各 SM 的任务队列
+2. GigaThread Engine 把 Grid 拆成多个**线程块Block**，投入各 SM 的任务队列
 3. 某 SM 上的 Warp 执行 load/store：
       - 数据若在寄存器/Shared → 本地完成
       - 否则经 L1 →（可能）L2 →（未命中）HBM
@@ -101,7 +101,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 | Global Memory | HBM3，经 Memory Controller 与 L2 访问 |
 | `__shared__` | 图 2 中 SM 底部 256 KB 区域（非 L2） |
 
-**关键结论**：`<<<grid, block>>>` 在整卡上被 **GigaThread Engine** 切成 Block 队列，再映射到 **144（或实卡启用的 132）个 SM** 之一；进入 SM 后，再以 **Warp** 为粒度由 Scheduler 发射指令（见下文第 2 节）。
+**关键结论**：`<<<grid, block>>>` 在整卡上被 **GigaThread Engine** 切成**线程块Block**队列，再映射到 **144（或实卡启用的 132）个 SM** 之一；进入 SM 后，再由各**处理分区**上的 Scheduler 以 **Warp** 为粒度发射指令（见下文第 2 节）。
 
 ---
 
@@ -110,16 +110,15 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 图 2 展示的 H100 SM 采用**四分区（Quad-Partitioned）**设计：中间是 **4 个完全相同的 Processing Block（处理块）**，上下则是 SM 级共享资源。
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│              L1 Instruction Cache（共享）                  │
-├──────────┬──────────┬──────────┬──────────────────────────┤
-│ Block 0  │ Block 1  │ Block 2  │ Block 3                  │
-│ (象限)   │ (象限)   │ (象限)   │ (象限)                   │
-├──────────┴──────────┴──────────┴──────────────────────────┤
-│  Tensor Memory Accelerator (TMA)                         │
-│  256 KB L1 Data Cache / Shared Memory                    │
-│  Tex（Texture Units）× 4                                 │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                           L1 Instruction Cache（共享）                                 │
+├─────────────────────┬─────────────────────┬───────────────────────────────────────────┤
+│ Processing Block 0  │ Processing Block 1  │ Processing Block 2  │ Processing Block 3  │
+├─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┤
+│  Tensor Memory Accelerator (TMA)                                                      │
+│  256 KB L1 Data Cache / Shared Memory                                                 │
+│  Tex（Texture Units）× 4                                                              │
+└───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 这种设计的意图是：在单个 SM 内**并行调度更多 Warp**，同时让指令取指、数据访存和计算流水线尽量互不阻塞。
@@ -131,9 +130,9 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 | 问题 | 在图 1（整卡）找答案 | 在图 2（SM）找答案 |
 |------|----------------------|---------------------|
 | 有多少算力单元？ | 8 GPC × 9 TPC × 2 SM = **144 SM** | 每 SM：128 FP32、4 Tensor Core… |
-| Block 在哪执行？ | 被 GigaThread 分到某个 **SM** | 该 SM 内 4 个 Processing Block 跑 Warp |
+| **线程块Block**在哪执行？ | 被 GigaThread 分到某个 **SM** | 进入 SM 后，由 4 个**处理分区Processing Block**上的 Scheduler 调度 Warp |
 | Global 数据从哪来？ | **HBM3** → MC → **L2** | SM **LD/ST** → L1 →（未命中）回到 L2/HBM |
-| 线程间快速共享？ | 不行（Block 不跨 SM） | 可以：**Shared Memory**（256 KB 池） |
+| 线程间快速共享？ | 不行（**线程块**不跨 SM） | 可以：**Shared Memory**（256 KB 池，线程块内共享） |
 | 多卡通信？ | **NVLink** | 对单 SM 透明，由驱动/NVSHMEM 等封装 |
 
 **延迟数量级（帮助建立直觉，非精确基准）**：
@@ -141,7 +140,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 | 存储层级 | 大致相对延迟 | 谁共享 |
 |----------|--------------|--------|
 | 寄存器 | 1× | 线程私有 |
-| Shared Memory / L1 | 低 | Block 内线程（SM 内） |
+| Shared Memory / L1 | 低 | **线程块Block**内线程（同一 SM 上） |
 | L2 | 更高 | 整卡所有 SM |
 | HBM3 | 最高 | 整卡 Global Memory |
 
@@ -149,20 +148,20 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ## 4. 指令通路：从 Cache 到执行单元
 
-每个 Processing Block 顶部是一条**取指 → 调度 → 发射**的流水线。
+每个**处理分区Processing Block**顶部是一条**取指 → 调度 → 发射**的流水线。
 
 ### 4.1 L1 / L0 Instruction Cache
 
 | 组件 | 位置 | 作用 |
 |------|------|------|
 | **L1 Instruction Cache** | SM 顶部，四块共享 | 缓存即将执行的指令，减少从显存取指的开销 |
-| **L0 Instruction Cache** | 每个 Block 独立 | 更小、更低延迟的指令缓存，服务本象限的 Warp |
+| **L0 Instruction Cache** | 每个**处理分区Processing Block**独立 | 更小、更低延迟的指令缓存，服务本分区的 Warp |
 
 **与编程的关系**：分支多、代码体积大的 kernel 更容易造成**指令 Cache 压力**和 **Warp 分化（divergence）**——同一 Warp 内线程走不同分支时，硬件会串行执行各分支路径，有效吞吐下降。
 
 ### 4.2 Warp Scheduler（32 thread/clk）
 
-- 每个 Block 有 **1 个 Warp Scheduler**，整个 SM 共 **4 个**。
+- 每个**处理分区Processing Block**有 **1 个 Warp Scheduler**，整个 SM 共 **4 个**。
 - 标注 **32 thread/clk** 表示：每个时钟周期最多为一个 Warp（32 线程）选出下一条要执行的指令。
 - 调度器负责在**就绪的 Warp 之间切换**——某个 Warp 在等内存时，立刻换另一个 Warp 执行，这是 GPU **用大量线程隐藏延迟**的核心机制。
 
@@ -174,7 +173,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 ```
   L1 Inst Cache
        ↓
-  L0 Inst Cache（每 Block）
+  L0 Inst Cache（每处理分区Processing Block）
        ↓
   Warp Scheduler  ←→  在多个活跃 Warp 间切换
        ↓
@@ -185,7 +184,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ## 5. 寄存器堆：线程私有的"工作台"
 
-每个 Processing Block 拥有：
+每个**处理分区Processing Block**拥有：
 
 > **Register File（16,384 × 32-bit）**
 
@@ -207,11 +206,11 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ## 6. 执行单元：各类"计算核心"
 
-每个 Processing Block 内有一组专用功能单元，负责不同类型的运算。
+每个**处理分区Processing Block**内有一组专用功能单元，负责不同类型的运算。
 
 ### 6.1 标量 / 向量浮点与整数单元
 
-| 单元 | 每 Block 数量 | 每 SM 合计 | 典型用途 |
+| 单元 | 每处理分区数量 | 每 SM 合计 | 典型用途 |
 |------|---------------|------------|----------|
 | **INT32** | 16 | 64 | 整数运算、地址计算、循环计数 |
 | **FP32** | 32 | 128 | 单精度浮点（`float`），通用计算主力 |
@@ -221,7 +220,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ### 6.2 第四代 Tensor Core
 
-- 每个 Block 有 **1 块第四代 Tensor Core**（图中绿色大块），SM 共 **4 块**。
+- 每个**处理分区Processing Block**有 **1 块第四代 Tensor Core**（图中绿色大块），SM 共 **4 块**。
 - 专为**矩阵乘累加（GEMM）**等深度学习核心算子设计。
 - H100 支持 **FP8、FP16、BF16、TF32、INT8** 等多种低精度格式，吞吐远高于普通 FP32 单元。
 - 编程接口：`wmma` API、cuBLAS、CUTLASS、框架底层算子等。
@@ -230,13 +229,13 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ### 6.3 Load/Store 单元（LD/ST）
 
-- 每 Block **8 个**，SM 共 **32 个**。
+- 每**处理分区Processing Block** **8 个**，SM 共 **32 个**。
 - 负责寄存器与各级存储器之间的数据搬运（global / shared / local）。
 - **合并访存（Coalesced Access）**：同一 Warp 访问连续地址时，硬件可合并为少量事务，带宽利用率高；随机或非对齐访问则成为常见瓶颈。
 
 ### 6.4 特殊函数单元（SFU）
 
-- 每 Block **1 个**，SM 共 **4 个**。
+- 每**处理分区Processing Block** **1 个**，SM 共 **4 个**。
 - 处理 `sin`、`cos`、`exp`、`sqrt`、`rcp` 等超越函数。
 - 吞吐量低于普通 FP32 乘加，热点路径上可用多项式逼近或 `__fast_*` 内建函数权衡精度与速度。
 
@@ -251,7 +250,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 - **容量**：256 KB（具体划分可在 L1 Cache 与 Shared Memory 之间动态配置，依架构与驱动策略而定）。
 - **双重角色**：
   - **L1 Data Cache**：缓存对 Global Memory 的访问，对程序员基本透明。
-  - **Shared Memory**：通过 `__shared__` 声明，Block 内线程显式共享，需配合 `__syncthreads()` 使用。
+  - **Shared Memory**：通过 `__shared__` 声明，**线程块Block**内线程显式共享，需配合 `__syncthreads()` 使用。
 
 ```
 Global Memory (HBM，高带宽但高延迟)
@@ -279,9 +278,9 @@ Register File (最快，线程私有)
 
 ## 8. 单 SM 资源汇总（便于记忆）
 
-将图中**每 Block 数量 × 4** 即可得到整个 SM 的峰值资源（理论值，实际可用量受 Occupancy、指令混合等影响）：
+将图中**每个处理分区Processing Block的数量 × 4** 即可得到整个 SM 的峰值资源（理论值，实际可用量受 Occupancy、指令混合等影响）：
 
-| 资源 | 每 Block | 每 SM（×4） |
+| 资源 | 每处理分区 | 每 SM（×4） |
 |------|----------|-------------|
 | Warp Scheduler | 1 | 4 |
 | Dispatch Unit | 1 | 4 |
@@ -304,7 +303,7 @@ Register File (最快，线程私有)
 
 | 你写的代码 / 概念 | 在 H100 SM 上的体现 |
 |-------------------|---------------------|
-| `<<<grid, block>>>` | Block 被分配到某个 SM；多个 Block 可排队或并行占满多 SM |
+| `<<<grid, block>>>` | **线程块Block**被分配到某个 SM；多个线程块可排队或并行占满多 SM |
 | `threadIdx` / `blockIdx` | 决定线程全局索引，进而影响访存地址是否合并 |
 | Warp（32 线程） | Scheduler 调度的最小单位；分化分支导致串行 |
 | `__shared__` | 使用 256 KB 区域中的 Shared Memory 部分 |
@@ -319,8 +318,8 @@ Register File (最快，线程私有)
 
 ```
 Host 经 PCIe 启动 kernel
-    → GigaThread Engine 把 Block 分配到某个 SM（图 1）
-    → Block 内线程每 32 个组成 Warp（图 2）
+    → GigaThread Engine 把**线程块**分配到某个 SM（图 1）
+    → 线程块内线程每 32 个组成 Warp，由某**处理分区**的 Scheduler 调度（图 2）
     → Warp Scheduler 选中 Warp，Dispatch 发射 LD 指令
     → LD/ST：先查 L1 → 未命中则 L2 → 再未命中则 HBM3
     → FP32 单元执行加法
@@ -334,7 +333,7 @@ Host 经 PCIe 启动 kernel
 
 结合**整卡（图 1）**与 **SM（图 2）**，优化时可按下面顺序自查：
 
-1. **并行度是否吃满整卡**：Grid 的 Block 数是否 ≥ SM 数（如 132+），避免大量 SM 空转？
+1. **并行度是否吃满整卡**：Grid 的**线程块**数是否 ≥ SM 数（如 132+），避免大量 SM 空转？
 2. **Occupancy**：寄存器、Shared Memory 用量是否限制了单 SM 内同时活跃的 Warp 数？
 3. **访存**：Global 访问是否合并？能否用 Shared Memory 分块，减少对 HBM 的往返？
 4. **L2 友好**：多 SM 反复读同一块数据时，是否利于 L2 复用（如只读常量、合理 tile 尺寸）？
@@ -355,16 +354,16 @@ Host 经 PCIe 启动 kernel
 - **8 GPC × 9 TPC × 2 SM = 144 SM** 构成计算主体；实卡常见 **132 SM** 启用。
 - **6 栈 HBM3 + 12 个 Memory Controller** 提供 Global Memory 带宽。
 - **中央 L2** 为所有 SM 共享，是 HBM 与 SM 之间的重要缓冲。
-- **GigaThread Engine** 负责 Block 级调度；**PCIe** 连 Host，**NVLink** 连多卡。
+- **GigaThread Engine** 负责**线程块**级调度；**PCIe** 连 Host，**NVLink** 连多卡。
 
 **单个 SM（图 2）**：
 
-- **四象限并行**：4 个 Processing Block，各有 Scheduler、寄存器堆和计算单元。
+- **四象限并行**：4 个**处理分区**，各有 Scheduler、寄存器堆和计算单元（≠ CUDA 线程块）。
 - **SIMT 执行**：以 Warp（32 线程）为单位取指、调度、发射。
 - **分层存储**：寄存器 → Shared Memory / L1 →（经 L2）→ HBM。
 - **专用加速**：第四代 Tensor Core + TMA。
 
-两张图合在一起，回答 CUDA 程序员最关心的链条：**Host 下发 → Block 落到哪个 SM → Warp 如何跑 → 数据从 HBM 怎么流到寄存器**。优化原则——足够多的 Block、合并访存、Shared Memory 分块、避免 Warp 分化、矩阵交给 Tensor Core、多卡走 NVLink——都对应图中具体硬件单元，而不是抽象口号。
+两张图合在一起，回答 CUDA 程序员最关心的链条：**Host 下发 → 线程块落到哪个 SM → Warp 在处理分区上如何跑 → 数据从 HBM 怎么流到寄存器**。优化原则——足够多的**线程块**、合并访存、Shared Memory 分块、避免 Warp 分化、矩阵交给 Tensor Core、多卡走 NVLink——都对应图中具体硬件单元，而不是抽象口号。
 
 ---
 

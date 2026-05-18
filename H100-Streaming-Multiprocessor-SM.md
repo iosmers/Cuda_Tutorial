@@ -161,7 +161,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 
 ### 4.2 Warp Scheduler（32 thread/clk）
 
-- 每个**处理分区Processing Block**有 **1 个 Warp Scheduler**，整个 SM 共 **4 个**。
+- 每个**处理分区Processing Block**有 **1 个 Warp Scheduler**，整个 SM 共 **4 个**,注意，每个 Scheduler 负责本分区内很多个 Warp，在它们之间轮流选下一条要执行的指令（某个 Warp 在等内存就切到另一个）。
 - 标注 **32 thread/clk** 表示：每个时钟周期最多为一个 Warp（32 线程）选出下一条要执行的指令。
 - 调度器负责在**就绪的 Warp 之间切换**——某个 Warp 在等内存时，立刻换另一个 Warp 执行，这是 GPU **用大量线程隐藏延迟**的核心机制。
 
@@ -194,7 +194,7 @@ SM 内 Shared Memory / L1 Data Cache (L1 Cache和Shared Memory共享一块256K�
 |------|------|
 | 用途 | 存放线程的局部变量、中间结果、地址计算等 |
 | 分配方式 | 由编译器 + 硬件在 kernel 启动时**静态划分**给各 Warp |
-| 与 Occupancy 的关系 | 每个线程用的寄存器越多 → 同一 SM 能同时驻留的 Warp 越少 → **Occupancy（占用率）**可能下降 |
+| 与 Occupancy 的关系 | 每个线程用的寄存器越多 → 同一 SM 能同时驻留的 Warp 越少 → **Occupancy（占用率）**可能下降(这里留一个坑， 需要研究一下SM Occupancy与寄存器文件之间的关系) |
 
 **编程启示**：
 

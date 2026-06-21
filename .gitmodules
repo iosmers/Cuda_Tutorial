@@ -1,0 +1,3 @@
+[submodule "GPUs-Specs"]
+	path = GPUs-Specs
+	url = https://github.com/sunkx109/GPUs-Specs.git

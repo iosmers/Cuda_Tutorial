@@ -2,6 +2,12 @@
 
 Collected on 2026-06-11. The 100 links below were deduplicated and checked with ranged HTTP requests.
 
+## GitHub Repositories to Remember
+
+- [GPU Mode Lectures](https://github.com/gpu-mode/lectures) / clone URL: `https://github.com/gpu-mode/lectures.git`
+  - Material for GPU Mode lectures，覆盖 CUDA、Triton、GPU kernels、性能优化等内容。
+  - TODO: 后续网络稳定时可加入 submodule：`git submodule add --depth 1 https://github.com/gpu-mode/lectures.git gpu-mode-lectures`
+
 ## NVIDIA Documentation and Training
 
 1. [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/pdf/CUDA_C_Programming_Guide.pdf)

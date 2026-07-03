@@ -1,3 +1,9 @@
 [submodule "GPUs-Specs"]
 	path = GPUs-Specs
 	url = https://github.com/sunkx109/GPUs-Specs.git
+[submodule "awesome-gpu-engineering"]
+	path = awesome-gpu-engineering
+	url = https://github.com/goabiaryan/awesome-gpu-engineering.git
+[submodule "awesome-computer-architecture"]
+	path = awesome-computer-architecture
+	url = https://github.com/aliyasoubi/awesome-computer-architecture

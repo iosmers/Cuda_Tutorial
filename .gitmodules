@@ -7,3 +7,18 @@
 [submodule "awesome-computer-architecture"]
 	path = awesome-computer-architecture
 	url = https://github.com/aliyasoubi/awesome-computer-architecture
+[submodule "tiny-gpu"]
+	path = tiny-gpu
+	url = https://github.com/adam-maj/tiny-gpu.git
+[submodule "miaow"]
+	path = miaow
+	url = https://github.com/VerticalResearchGroup/miaow.git
+[submodule "gpgpu-sim_distribution"]
+	path = gpgpu-sim_distribution
+	url = https://github.com/gpgpu-sim/gpgpu-sim_distribution.git
+[submodule "accel-sim-framework"]
+	path = accel-sim-framework
+	url = https://github.com/accel-sim/accel-sim-framework.git
+[submodule "sass-king"]
+	path = sass-king
+	url = https://github.com/florianmattana/sass-king.git

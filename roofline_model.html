@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roofline Model 屋顶线模型 · 进阶版</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: rgba(15, 30, 53, 0.88);
+      --card: rgba(255, 255, 255, 0.06);
+      --line: rgba(177, 210, 255, 0.2);
+      --text: #edf6ff;
+      --muted: #aebfd5;
+      --blue: #5cc8ff;
+      --cyan: #45ffd2;
+      --purple: #a78bfa;
+      --orange: #ffbc75;
+      --red: #ff6b8a;
+      --green: #86efac;
+      --yellow: #ffe066;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(92, 200, 255, 0.24), transparent 28rem),
+        radial-gradient(circle at 86% 10%, rgba(167, 139, 250, 0.22), transparent 26rem),
+        radial-gradient(circle at 70% 88%, rgba(69, 255, 210, 0.12), transparent 24rem),
+        var(--bg);
+      line-height: 1.72;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    strong { color: #fff; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    .container { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+
+    header {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(14px);
+      background: rgba(7, 17, 31, 0.82);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav { min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 850; letter-spacing: .2px; }
+
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 12px;
+      display: grid; place-items: center; color: #05111e;
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      box-shadow: 0 0 30px rgba(69, 255, 210, .28);
+      font-weight: 900;
+    }
+
+    nav { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    nav a {
+      color: var(--muted); font-size: 13px;
+      padding: 6px 10px; border-radius: 999px;
+    }
+    nav a:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+
+    .hero {
+      padding: 60px 0 30px;
+      display: grid; grid-template-columns: 1.02fr .98fr;
+      gap: 34px; align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 12px; border-radius: 999px;
+      color: #bdf8ff;
+      background: rgba(92, 200, 255, .09);
+      border: 1px solid rgba(92, 200, 255, .28);
+      font-size: 14px; margin-bottom: 16px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); }
+
+    h1 { margin: 0 0 18px; font-size: clamp(36px, 5.6vw, 66px); line-height: 1.06; letter-spacing: -2px; }
+
+    .gradient-text {
+      background: linear-gradient(100deg, #fff, #9ee9ff 36%, #78ffdf 68%, #d7c7ff);
+      -webkit-background-clip: text; color: transparent;
+    }
+
+    .lead { margin: 0; max-width: 820px; font-size: clamp(16px, 1.8vw, 19px); color: #c7d9ed; }
+
+    .hero-note {
+      margin-top: 18px; padding: 14px 18px; border-radius: 18px;
+      color: #dff8ff;
+      background: rgba(92, 200, 255, .08);
+      border: 1px solid rgba(92, 200, 255, .22);
+      font-size: 15px;
+    }
+
+    .formula {
+      margin-top: 14px; padding: 16px 18px; border-radius: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: rgba(5, 13, 25, .72);
+      border: 1px solid rgba(92,200,255,.18);
+      color: #dff8ff; overflow-x: auto; font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .formula .hl { color: var(--cyan); font-weight: 700; }
+    .formula .orange { color: var(--orange); font-weight: 700; }
+    .formula .purple { color: var(--purple); font-weight: 700; }
+    .formula .muted { color: #7d93ad; }
+
+    .chart-card {
+      border-radius: 28px; padding: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
+      border: 1px solid var(--line);
+      box-shadow: 0 28px 80px rgba(0,0,0,.34);
+    }
+
+    .chart-title {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; color: var(--muted); font-size: 13px;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+
+    .roofline-svg {
+      width: 100%; height: auto; display: block;
+      border-radius: 22px;
+      background: rgba(5, 13, 25, .58);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    main { padding-bottom: 62px; }
+    section { margin: 38px 0; }
+
+    .section-head {
+      display: flex; justify-content: space-between; align-items: end;
+      gap: 18px; margin-bottom: 18px; flex-wrap: wrap;
+    }
+
+    h2 { margin: 0; font-size: clamp(25px, 3.6vw, 36px); line-height: 1.18; letter-spacing: -.8px; }
+    h2 .num { color: var(--cyan); font-weight: 900; margin-right: 8px; }
+
+    .section-head p { max-width: 620px; margin: 0; color: var(--muted); }
+
+    .grid { display: grid; gap: 16px; }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+    .card {
+      padding: 20px; border-radius: 22px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 55px rgba(0,0,0,.20);
+    }
+
+    .card h3 {
+      margin: 0 0 8px; display: flex; align-items: center; gap: 10px;
+      font-size: 19px;
+    }
+
+    .card p { margin: 0; color: #c6d7ea; }
+    .card p + p { margin-top: 8px; }
+
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 28px; min-width: 28px; padding: 0 8px;
+      border-radius: 9px;
+      background: rgba(92,200,255,.14); color: #adf0ff;
+      border: 1px solid rgba(92,200,255,.24);
+      font-size: 13px; font-weight: 900;
+    }
+    .badge.orange { color: #ffe0bd; background: rgba(255,188,117,.14); border-color: rgba(255,188,117,.26); }
+    .badge.green { color: #ccffd9; background: rgba(134,239,172,.14); border-color: rgba(134,239,172,.26); }
+    .badge.purple { color: #e3d6ff; background: rgba(167,139,250,.16); border-color: rgba(167,139,250,.28); }
+    .badge.red { color: #ffd0da; background: rgba(255,107,138,.14); border-color: rgba(255,107,138,.26); }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line); border-radius: 22px;
+      background: rgba(255,255,255,.04);
+    }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; }
+    th, td { padding: 13px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,.08); }
+    th { color: #e5f8ff; font-size: 13px; background: rgba(92,200,255,.10); }
+    td { color: #c6d7ea; font-size: 14px; }
+    td .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
+      font-size: 12px; font-weight: 700;
+    }
+    .tag.mem { color: #b9ffe9; background: rgba(69,255,210,.12); }
+    .tag.comp { color: #ffe0bd; background: rgba(255,188,117,.12); }
+    .tag.balanced { color: #e3d6ff; background: rgba(167,139,250,.14); }
+    tr:last-child td { border-bottom: none; }
+    tr.krow { cursor: pointer; transition: background .15s; }
+    tr.krow:hover { background: rgba(92,200,255,.06); }
+    tr.krow.active { background: rgba(92,200,255,.12); }
+
+    .controls {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .control label {
+      display: flex; justify-content: space-between; gap: 12px;
+      color: #dceeff; font-weight: 700; margin-bottom: 8px; font-size: 14px;
+    }
+    .control label span { color: var(--cyan); font-family: ui-monospace, Menlo, monospace; }
+
+    input[type="range"] { width: 100%; accent-color: var(--cyan); }
+
+    .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .toggle {
+      padding: 6px 12px; border-radius: 999px; font-size: 13px;
+      border: 1px solid var(--line); color: var(--muted);
+      cursor: pointer; user-select: none; transition: all .15s;
+    }
+    .toggle:hover { color: var(--text); }
+    .toggle.active { color: #05111e; background: var(--cyan); border-color: var(--cyan); font-weight: 700; }
+
+    .result-box {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 10px; margin-top: 14px;
+    }
+    .metric {
+      padding: 12px 14px; border-radius: 14px;
+      background: rgba(255,255,255,.055);
+      border: 1px solid rgba(255,255,255,.10);
+    }
+    .metric span { display: block; color: var(--muted); font-size: 12px; }
+    .metric strong { display: block; font-size: 19px; line-height: 1.25; }
+
+    .highlight {
+      border-left: 4px solid var(--cyan);
+      background: rgba(69,255,210,.09);
+      padding: 16px 20px; border-radius: 14px;
+      color: #d5fff7; font-size: 15px;
+    }
+    .warning {
+      border-left: 4px solid var(--orange);
+      background: rgba(255,188,117,.10);
+      padding: 16px 20px; border-radius: 14px;
+      color: #ffe4c2; font-size: 15px;
+    }
+    .note {
+      border-left: 4px solid var(--purple);
+      background: rgba(167,139,250,.10);
+      padding: 16px 20px; border-radius: 14px;
+      color: #ecdcff; font-size: 15px;
+    }
+
+    .callout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+
+    .summary {
+      padding: 26px; border-radius: 28px;
+      border: 1px solid rgba(69,255,210,.24);
+      background: linear-gradient(135deg, rgba(69,255,210,.14), rgba(92,200,255,.07));
+    }
+    .summary h2 { margin-bottom: 12px; }
+    .summary p { color: #d2ecf2; margin: 0; font-size: 17px; }
+    .summary ul { margin: 12px 0 0; padding-left: 22px; color: #d2ecf2; }
+    .summary li { margin-bottom: 6px; }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 0 38px; text-align: center;
+      color: var(--muted); font-size: 13px;
+    }
+
+    .kw { color: var(--cyan); font-weight: 600; }
+
+    @media (max-width: 940px) {
+      .hero, .controls, .calculator { grid-template-columns: 1fr; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 10px; }
+      .cols-3, .cols-2, .cols-4 { grid-template-columns: 1fr; }
+      .nav { flex-direction: column; align-items: flex-start; padding: 12px 0; }
+      nav { justify-content: flex-start; }
+    }
+
+    @media (max-width: 560px) {
+      .container { width: min(100% - 24px, 1180px); }
+      h1 { letter-spacing: -1.2px; }
+      .chart-card { padding: 14px; }
+      .result-box { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <a class="brand" href="#top">
+        <span class="brand-mark">R</span>
+        <span>Roofline Model · 进阶版</span>
+      </a>
+      <nav aria-label="页面导航">
+        <a href="#concept">核心概念</a>
+        <a href="#geometry">几何解读</a>
+        <a href="#interactive">交互对比</a>
+        <a href="#kernels">常见 Kernel</a>
+        <a href="#hierarchy">多层级</a>
+        <a href="#measure">实测</a>
+        <a href="#limits">局限性</a>
+        <a href="#case">实战案例</a>
+        <a href="#interview">面试要点</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <section class="hero">
+      <div>
+        <div class="eyebrow"><span class="dot"></span> GPU 性能分析 · 第一性模型</div>
+        <h1><span class="gradient-text">Roofline Model</span><br/>屋顶线模型</h1>
+        <p class="lead">
+          Roofline Model 回答一个最本质的问题：<strong>在硬件峰值算力 <span class="mono">π</span> 和显存带宽 <span class="mono">β</span> 给定的前提下，一个算术强度为 <span class="mono">I</span> 的 kernel 理论上最多能跑多快？</strong>它把所有性能瓶颈归一到两条线——内存带宽斜线和峰值算力水平线——组成的"屋顶"。_kernel 落在斜线段就是 memory-bound，落在水平段就是 compute-bound。_
+        </p>
+        <div class="hero-note">
+          <strong>为什么它重要：</strong>在动手优化前先用 Roofline 判断方向，能避免"无脑加 Tensor Core 但 kernel 其实卡在 HBM 带宽上"这类错误。它是 CUDA/HPC 性能分析的<strong>第一性工具</strong>，也是 NVIDIA、DeepSeek、字节等公司 LLM-infrastructure 面试的高频考点。
+        </div>
+      </div>
+
+      <aside class="chart-card" aria-label="Roofline Model 示意图">
+        <div class="chart-title">
+          <span>典型 Roofline（log-log）</span>
+          <span>横轴 AI ｜ 纵轴 Performance</span>
+        </div>
+        <svg class="roofline-svg" viewBox="0 0 760 500" role="img">
+          <defs>
+            <linearGradient id="roofGradient" x1="0" x2="1">
+              <stop offset="0%" stop-color="#45ffd2" />
+              <stop offset="65%" stop-color="#5cc8ff" />
+              <stop offset="100%" stop-color="#a78bfa" />
+            </linearGradient>
+            <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+
+          <rect x="0" y="0" width="760" height="500" rx="22" fill="rgba(5,13,25,.35)" />
+
+          <g stroke="rgba(255,255,255,.08)" stroke-width="1">
+            <line x1="90" y1="410" x2="690" y2="410" />
+            <line x1="90" y1="330" x2="690" y2="330" />
+            <line x1="90" y1="250" x2="690" y2="250" />
+            <line x1="90" y1="170" x2="690" y2="170" />
+            <line x1="90" y1="90" x2="690" y2="90" />
+            <line x1="150" y1="50" x2="150" y2="410" />
+            <line x1="270" y1="50" x2="270" y2="410" />
+            <line x1="390" y1="50" x2="390" y2="410" />
+            <line x1="510" y1="50" x2="510" y2="410" />
+            <line x1="630" y1="50" x2="630" y2="410" />
+          </g>
+
+          <g stroke="#cfe7ff" stroke-width="2">
+            <line x1="90" y1="410" x2="705" y2="410" />
+            <line x1="90" y1="410" x2="90" y2="45" />
+          </g>
+          <text x="400" y="462" fill="#cfe7ff" text-anchor="middle" font-size="16" font-weight="700">Arithmetic Intensity  I = FLOPs / Byte</text>
+          <text x="26" y="235" fill="#cfe7ff" text-anchor="middle" font-size="16" font-weight="700" transform="rotate(-90 26 235)">Performance  P = FLOP/s</text>
+
+          <g fill="#9fb4cf" font-size="13" text-anchor="middle">
+            <text x="150" y="432">0.1</text>
+            <text x="270" y="432">1</text>
+            <text x="390" y="432">10</text>
+            <text x="510" y="432">100</text>
+            <text x="630" y="432">1000</text>
+          </g>
+
+          <path d="M120 390 L410 115 L665 115" stroke="url(#roofGradient)" stroke-width="7" fill="none" filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round" />
+          <line x1="410" y1="115" x2="410" y2="410" stroke="rgba(255,188,117,.7)" stroke-dasharray="8 7" stroke-width="2" />
+          <circle cx="410" cy="115" r="7" fill="#ffbc75" filter="url(#glow)" />
+
+          <text x="240" y="232" fill="#45ffd2" font-size="16" font-weight="900" transform="rotate(-43 240 232)">Memory Bandwidth Roof: P = β·I</text>
+          <text x="545" y="94" fill="#a78bfa" font-size="16" font-weight="900">Peak Compute Roof: P = π</text>
+          <text x="410" y="96" fill="#ffbc75" font-size="14" font-weight="900" text-anchor="middle">Ridge Point I* = π/β</text>
+
+          <rect x="140" y="285" width="184" height="54" rx="14" fill="rgba(69,255,210,.10)" stroke="rgba(69,255,210,.25)" />
+          <text x="232" y="307" fill="#eaf3ff" font-size="14" font-weight="800" text-anchor="middle">Memory-bound 区域</text>
+          <text x="232" y="330" fill="#9fb4cf" font-size="12" text-anchor="middle">优化: 减少访存 / 提高复用</text>
+
+          <rect x="470" y="155" width="178" height="54" rx="14" fill="rgba(167,139,250,.10)" stroke="rgba(167,139,250,.25)" />
+          <text x="559" y="177" fill="#eaf3ff" font-size="14" font-weight="800" text-anchor="middle">Compute-bound 区域</text>
+          <text x="559" y="200" fill="#9fb4cf" font-size="12" text-anchor="middle">优化: 提高指令吞吐</text>
+        </svg>
+      </aside>
+    </section>
+
+    <section id="concept">
+      <div class="section-head">
+        <h2><span class="num">1</span>核心概念：三个量 + 一个 min</h2>
+        <p>把 Roofline 想成三件事：<strong>硬件能提供什么</strong>、<strong>kernel 需要什么</strong>、<strong>两者怎么耦合</strong>。</p>
+      </div>
+
+      <div class="grid cols-3">
+        <article class="card">
+          <h3><span class="badge">π</span> Peak Compute</h3>
+          <p>GPU 单位时间能完成的最多浮点运算数，单位 FLOP/s。和 dtype 强相关：<strong>FP64 &lt; FP32 &lt; FP16 &lt; Tensor Core (BF16/FP16/FP8)</strong>。例如 H100 SXM5：FP64 34 TFLOPs，FP32 67 TFLOPs，FP16 Tensor Core 989 TFLOPs，FP8 1979 TFLOPs。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge orange">β</span> Peak Memory Bandwidth</h3>
+          <p>GPU 单位时间从显存搬运的最多字节数，单位 Byte/s。HBM3e 比 HBM2e 快很多：H100 SXM5 是 3.35 TB/s，H200 是 4.8 TB/s，B200 是 8 TB/s。注意这是<strong>理论峰值</strong>，实测通常打 80~90%。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge green">I</span> Arithmetic Intensity</h3>
+          <p>kernel 每从内存搬运 1 Byte 能做多少次浮点运算：_<span class="mono">I = FLOPs / Bytes</span>_。注意分母是<strong>实际触达 DRAM 的字节数</strong>（cache 命中的不算），不是程序申请的内存大小。</p>
+        </article>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3><span class="badge purple">核心公式</span> Attainable Performance</h3>
+        <div class="formula">
+<span class="muted"># 内存带宽能撑起的性能上限：</span>
+P<sub>mem</sub>(I) = <span class="hl">β</span> · <span class="hl">I</span>
+<span class="muted"># 计算单元能撑起的性能上限：</span>
+P<sub>comp</sub>(I) = <span class="orange">π</span>
+<span class="muted"># Roofline 取两者最小值：</span>
+<span class="purple">P<sub>attain</sub>(I) = min( β · I , π )</span>
+        </div>
+        <p style="margin-top:14px;">
+          <strong>为什么是 min？</strong>因为 GPU 是流水线机器，计算和访存同时进行。_<span class="mono">P = FLOP/s</span>_ 必须同时满足"算得过来"和"喂得过来"。任一环节供应不足，整体就卡在那个环节。<strong>带宽斜线</strong> <span class="mono">P = β·I</span> 描述"喂得过来"的极限，<strong>计算水平线</strong> <span class="mono">P = π</span> 描述"算得过来"的极限。两者交点叫 <strong>Ridge Point</strong>。
+        </p>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3><span class="badge">I*</span> Ridge Point：分水岭</h3>
+        <div class="formula">
+<span class="muted"># 令 β·I = π 解出 I：</span>
+<span class="purple">I* = π / β</span>   <span class="muted"># 单位 FLOPs/Byte</span>
+        </div>
+        <p style="margin-top:12px;">
+          Ridge Point 是 memory-bound 和 compute-bound 的<strong>分水岭</strong>。以 H100 SXM5 (FP32) 为例：<span class="mono">I* = 67 / 3.35 ≈ 20 FLOPs/Byte</span>。AI &lt; 20 的 kernel 一定 memory-bound；AI &gt; 20 才有机会 compute-bound。<strong>注意不同 dtype 的 π 不同，ridge point 也不同</strong>：FP16 Tensor Core 的 I* ≈ 989/3.35 ≈ 295，所以 Tensor Core kernel 必须 AI 极高才可能 compute-bound。
+        </p>
+      </div>
+    </section>
+
+    <section id="geometry">
+      <div class="section-head">
+        <h2><span class="num">2</span>为什么 log-log 图上斜率是 1？</h2>
+        <p>这是 Roofline 视觉化最容易被忽略、但面试常问的细节。</p>
+      </div>
+
+      <div class="grid cols-2">
+        <article class="card">
+          <h3><span class="badge">线性轴</span> 不直观</h3>
+          <p>如果直接画 <span class="mono">P = β·I</span>，斜率为 β 的直线。但 GPU 上 AI 跨度极大：elementwise ~0.2，GEMM N=4096 ~680。线性轴下小 AI 的 kernel 全挤在原点附近看不清。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge green">log-log</span> 斜率 1</h3>
+          <p>对两边取 log：<span class="mono">log P = log β + log I</span>。在 log-log 图上这是一条<strong>斜率恒为 1</strong>的直线，与 β 无关——β 只决定截距。换硬件时 β 变大，斜线<strong>整体上移</strong>，ridge point 右移。</p>
+        </article>
+      </div>
+
+      <div class="highlight" style="margin-top:14px;">
+        <strong>关键推论：</strong>log-log 图上 <span class="mono">log P = log π</span> 是水平线，<span class="mono">log P = log β + log I</span> 是 45° 斜线。两线交点即 ridge point。_<strong>把一个 kernel 放进图中，它一定落在屋顶线下方——离屋顶越远，说明优化空间越大</strong>_。
+      </div>
+    </section>
+
+    <section id="interactive">
+      <div class="section-head">
+        <h2><span class="num">3</span>交互对比：6 个典型 kernel 在同一张图</h2>
+        <p>调硬件参数，观察不同 kernel 在屋顶下的位置和"utilization gap"如何变化。点击表格行高亮对应 kernel。</p>
+      </div>
+
+      <div class="controls">
+        <div class="control">
+          <label for="peakCompute">Peak Compute π <span id="peakComputeText">67 TFLOP/s (FP32)</span></label>
+          <input id="peakCompute" type="range" min="5" max="1000" value="67" step="1" />
+        </div>
+        <div class="control">
+          <label for="bandwidth">HBM Bandwidth β <span id="bandwidthText">3.35 TB/s</span></label>
+          <input id="bandwidth" type="range" min="0.5" max="9" value="3.35" step="0.05" />
+        </div>
+      </div>
+
+      <div class="toggle-row" id="presetRow">
+        <span class="toggle active" data-preset="h100">H100 SXM5 FP32</span>
+        <span class="toggle" data-preset="h100tc">H100 FP16 Tensor Core</span>
+        <span class="toggle" data-preset="a100">A100 FP32</span>
+        <span class="toggle" data-preset="4090">RTX 4090 FP32</span>
+      </div>
+
+      <div class="chart-card" style="margin-top:8px;">
+        <div class="chart-title">
+          <span>多 Kernel Roofline 对比</span>
+          <span id="ridgeHint">Ridge Point I* = π/β</span>
+        </div>
+        <svg id="dynamicChart" class="roofline-svg" viewBox="0 0 820 540" role="img"></svg>
+      </div>
+
+      <div class="table-wrap" style="margin-top:16px;">
+        <table id="kernelTable">
+          <thead>
+            <tr>
+              <th>Kernel</th>
+              <th>Arithmetic Intensity</th>
+              <th>理论上限</th>
+              <th>瓶颈类型</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kernels">
+      <div class="section-head">
+        <h2><span class="num">4</span>常见 Kernel 的 AI 速查表</h2>
+        <p>面试常考"某 kernel 是 memory-bound 还是 compute-bound"。下面是手算 AI 的标准方法。</p>
+      </div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3><span class="badge green">手算公式</span> AI = 总 FLOPs / 总 DRAM Bytes</h3>
+        <div class="formula">
+<span class="muted"># 分子：kernel 实际执行的浮点运算次数</span>
+FLOPs = (循环次数) × (每次迭代的浮点运算数)
+<span class="muted"># 分母：从 HBM 搬运的字节数（命中 cache 的不算）</span>
+Bytes = Σ (每个 tensor 的元素数 × dtype 字节数)   <span class="muted"># 仅首次未命中部分</span>
+<span class="purple">I = FLOPs / Bytes</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Kernel</th>
+              <th>FLOPs</th>
+              <th>DRAM Bytes (FP32)</th>
+              <th>AI (FP32)</th>
+              <th>分类</th>
+              <th>典型优化方向</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Elementwise</strong> (axpy: y = αx+y)</td>
+              <td>2N</td>
+              <td>12N (读 x,y,写 y)</td>
+              <td>0.17</td>
+              <td><span class="tag mem">Memory</span></td>
+              <td>合并访问、vectorized load、kernel fusion</td>
+            </tr>
+            <tr>
+              <td><strong>Reduction</strong> (sum: Σxᵢ)</td>
+              <td>N</td>
+              <td>4N (读 x, 写 1 个标量可忽略)</td>
+              <td>0.25</td>
+              <td><span class="tag mem">Memory</span></td>
+              <td>tree reduction、warp shuffle、避免 bank conflict</td>
+            </tr>
+            <tr>
+              <td><strong>LayerNorm</strong> (over D)</td>
+              <td>~5D</td>
+              <td>~12 (读 x 2 趟: mean+var+norm, 写 y)</td>
+              <td>~0.4</td>
+              <td><span class="tag mem">Memory</span></td>
+              <td>online 归一化、kernel fusion、register tiling</td>
+            </tr>
+            <tr>
+              <td><strong>Softmax</strong> (over D)</td>
+              <td>~3D</td>
+              <td>~12 (3 趟扫描)</td>
+              <td>~0.25</td>
+              <td><span class="tag mem">Memory</span></td>
+              <td>online softmax (Flash-1)、shared memory</td>
+            </tr>
+            <tr>
+              <td><strong>3D Stencil</strong> (7-pt)</td>
+              <td>7N</td>
+              <td>~32N (含 halo)</td>
+              <td>~0.22</td>
+              <td><span class="tag mem">Memory</span></td>
+              <td>cache blocking、shared memory tiling、time skewing</td>
+            </tr>
+            <tr>
+              <td><strong>GEMM N=N</strong> (C=A·B, FP32)</td>
+              <td>2N³</td>
+              <td>~12N² (A,B 各读 N², C 写 N²; 复用 N 次)</td>
+              <td>N/6</td>
+              <td><span class="tag mem" data-n="64">Memory (N=64)</span></td>
+              <td>shared memory tiling → register tiling → Tensor Core</td>
+            </tr>
+            <tr>
+              <td><strong>GEMM N=4096</strong></td>
+              <td>2·4096³</td>
+              <td>~12·4096²</td>
+              <td>~683</td>
+              <td><span class="tag comp">Compute</span></td>
+              <td>Tensor Core、pipeline、warp tile</td>
+            </tr>
+            <tr>
+              <td><strong>Attention</strong> (naive, N=d)</td>
+              <td>~5N²d</td>
+              <td>~16N² (Q,K,V,O 4 个 N×d)</td>
+              <td>~5d/16</td>
+              <td><span class="tag mem" data-n="64">Memory (d=64)</span></td>
+              <td>FlashAttention (tiling + online softmax)</td>
+            </tr>
+            <tr>
+              <td><strong>FlashAttention-2</strong></td>
+              <td>~5N²d</td>
+              <td>~16N² (但 HBM 流量降到理论下限)</td>
+              <td>~5d/16</td>
+              <td><span class="tag balanced">Balanced</span></td>
+              <td>已接近 roofline; 进一步靠 dtype + 算子融合</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note" style="margin-top:14px;">
+        <strong>关键洞察：</strong>从 AI 表能直接看出<strong>算法分类</strong>——O(N) 计算配 O(N) 访存的 kernel（elementwise/reduction/layernorm）几乎一定 memory-bound；O(N³) 计算配 O(N²) 访存的 GEMM 在 N 足够大时一定 compute-bound。<strong>Transformer 推理的 prefill 阶段</strong>（GEMM 为主）通常 compute-bound；<strong>decode 阶段</strong>（逐 token、KV cache 读多算少）几乎总是 memory-bound——这是 LLM 推理系统设计的核心约束。
+      </div>
+    </section>
+
+    <section id="hierarchy">
+      <div class="section-head">
+        <h2><span class="num">5</span>多层级 Roofline：缓存也有屋顶</h2>
+        <p>真实 GPU 不是"CPU↔HBM"两点结构，而是 L1→L2→HBM 多级。每级都有带宽上限，对应一条不同的斜线。</p>
+      </div>
+
+      <div class="grid cols-2">
+        <article class="card">
+          <h3><span class="badge">单层 Roofline</span> 仅 HBM</h3>
+          <p>最简单的 Roofline 只画 HBM 带宽斜线。它假设<strong>所有数据都从 HBM 搬</strong>。但真实 kernel 会命中 L1/L2 cache，实际 DRAM 流量比"申请内存字节数"小，AI 反而更高。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge green">多层 Roofline</span> Hierarchical</h3>
+          <p>对每一级 cache 画一条带宽斜线：<strong>L1 斜线最高、L2 次之、HBM 最低</strong>。kernel 实际落点取决于数据复用模式：tile 内复用命中 L1，跨 tile 命中 L2，跨 iteration 才回 HBM。</p>
+        </article>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3><span class="badge purple">CEIL</span> Compute 也有多条</h3>
+        <p>水平线也不止一条：FP64/FP32/FP16/BF16/FP8 各有自己的 π，<strong>Tensor Core 的 π 远高于 CUDA Core</strong>。还会按指令类型分（FMA vs MULT vs SFU）。NVIDIA 工具里把这种"分类型的上限"叫 <strong>ceil</strong>，把多层 roofline 叫 <strong>hierarchical roofline</strong>。</p>
+        <div class="formula" style="margin-top:10px;">
+<span class="muted"># 完整 Roofline 应取所有 ceil 的最小值：</span>
+P<sub>attain</sub>(I) = min( <span class="hl">π<sub>FMA</sub></span>, <span class="orange">β<sub>HBM</sub>·I</span>, <span class="purple">β<sub>L2</sub>·I<sub>L2</sub></span>, <span class="hl">β<sub>L1</sub>·I<sub>L1</sub></span>, ... )
+        </div>
+      </div>
+
+      <div class="warning" style="margin-top:14px;">
+        <strong>实战要点：</strong>_<span class="mono">ncu</span>_ (Nsight Compute) 给出的 roofline 默认是 HBM-only。要看 L2 命中后的真实 AI，需要看 <span class="mono">sm__inst_executed_pipe_*  </span>等指标，并对比 <span class="mono">dram__bytes_read</span> 与 <span class="mono">lts__t_bytes</span>（L2 流量）。这是高级 kernel 优化必经一步。
+      </div>
+    </section>
+
+    <section id="measure">
+      <div class="section-head">
+        <h2><span class="num">6</span>如何实测 AI 和 Achieved Performance</h2>
+        <p>理论 AI 是手算的；实战必须用 profiler 实测，否则优化方向可能完全错。</p>
+      </div>
+
+      <div class="grid cols-2">
+        <article class="card">
+          <h3><span class="badge">Step 1</span> ncu 命令行</h3>
+          <div class="formula" style="font-size:13px;">
+ncu --set roofline \\
+    --target-processes all \\
+    -k "regex:your_kernel" \\
+    -o profile.ncu-rep \\
+    ./your_app
+          </div>
+          <p style="margin-top:10px;"><span class="mono">--set roofline</span> 会自动收集绘制 roofline 所需的所有指标：每个 kernel 的 achieved FLOP/s、DRAM bytes、L2 bytes、指令分布等。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge green">Step 2</span> 关键指标</h3>
+          <ul style="margin:0; padding-left:20px; color:#c6d7ea;">
+            <li><span class="mono">sm__throughput.avg.pct_of_peak_sustained_elapsed</span> — 计算 SM 占用率</li>
+            <li><span class="mono">dram__throughput.avg.pct_of_peak_sustained_elapsed</span> — HBM 带宽占用率</li>
+            <li><span class="mono">sm__inst_executed_pipe_tensor_op_hmma.sum</span> — Tensor Core 指令数</li>
+            <li><span class="mono">dram__bytes.sum</span> — 实际 DRAM 流量（用来算真实 AI）</li>
+            <li><span class="mono">smsp__inst_executed.sum</span> — 总指令数</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3><span class="badge purple">Step 3</span> 在 ncu-rep 里读图</h3>
+        <p>ncu-rep 的 roofline 视图会画出<strong>每个 kernel 的实测点</strong>叠在屋顶下。<strong>点的颜色</strong>表示瓶颈类型（绿=memory-bound、紫=compute-bound、黄=latency-bound）；<strong>点到屋顶的距离</strong>就是优化空间。如果点既不在斜线也不在水平线附近，说明<strong>latency-bound</strong>——这是单层 roofline 看不到的盲区，需要看 stall reasons。</p>
+      </div>
+
+      <div class="note" style="margin-top:14px;">
+        <strong>常见坑：</strong>(1) 手算 AI 用"申请内存大小"作分母，但 cache 命中后真实 DRAM 流量更小，实测 AI 更高；(2) 用 FP32 算 FLOP/s 但 kernel 实际跑 Tensor Core，π 估计错位；(3) Multi-kernel launch 场景下 ncu 默认只 profile 第一个，需要 <span class="mono">--launch-count N</span> 或指定 <span class="mono">--launch-skip</span>。
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head">
+        <h2><span class="num">7</span>Roofline 的局限性</h2>
+        <p>面试官常追问："什么时候 Roofline 失效？"——以下都是。</p>
+      </div>
+
+      <div class="callout-grid">
+        <article class="card">
+          <h3><span class="badge red">1</span> Latency-bound 不可见</h3>
+          <p>Roofline 只看吞吐量（throughput），不看延迟（latency）。如果 kernel 中<strong>每个 warp 只能跑少量指令且依赖链长</strong>（如 scan、递归、串行依赖），即使带宽和算力都没满，性能也上不去。这叫 latency-bound，需要看 <span class="mono">smsp__warp_issue_stalled_*</span> stall reasons。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge red">2</span> Occupancy 不代表性能</h3>
+          <p>高 occupancy 不等于高性能。寄存器压力大、指令级并行（ILP）差的 kernel 即使 occupancy 100% 也可能跑不到屋顶。<strong>不要把 occupancy 当优化目标</strong>，把它当诊断指标。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge red">3</span> 理论 π ≠ Achievable π</h3>
+          <p>规格书的 π 是 FMA 全速的极限值。真实 kernel 有指令混合（FMA/MUL/SFU/INT 比例），实际 achievable π 通常只有规格值的 70~90%。建议用<strong>实测峰值</strong>（如 cutlass benchmark）替代规格值画屋顶。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge red">4</span> 单一 dtype 假设</h3>
+          <p>真实 kernel 经常混合 dtype（如 layernorm 中 FP32 accumulator + FP16 输入）。单一 π 画不出准确屋顶，需要按指令类型分别取 ceil。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge red">5</span> 忽略非算术单元</h3>
+          <p>SFU（特殊函数 sin/cos/exp）、LSU（load/store unit）、copy engine 都不在 roofline 里。_<span class="mono">exp</span>_ 密集的 kernel 可能卡在 SFU 而不是 FMA。需要看 pipe-level 指标。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge red">6</span> 系统级瓶颈不可见</h3>
+          <p>Roofline 是<strong>单 kernel</strong>模型。多 kernel 之间的 launch overhead、CPU-GPU 同步、PCIe/NVLink 数据传输、KV cache 拷贝、stream 串行化等系统级瓶颈，需要 <span class="mono">Nsight Systems</span> 而非 <span class="mono">Nsight Compute</span>。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="case">
+      <div class="section-head">
+        <h2><span class="num">8</span>实战案例：GEMM 优化路径</h2>
+        <p>从 naive GEMM 到 Tensor Core，看每一步在 roofline 上的位置如何变化（N=4096 FP32, H100 SXM5）。</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>版本</th>
+              <th>实现</th>
+              <th>实测 AI</th>
+              <th>实测 P</th>
+              <th>Roofline 上位置</th>
+              <th>下一步瓶颈</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>v1 Naive</strong></td>
+              <td>每线程算一个 C[i,j]，A/B 重复读 N 次</td>
+              <td>0.17 (DRAM 真实流量≈12N³)</td>
+              <td>~0.5 TFLOP/s</td>
+              <td>远离斜线（既没吃满带宽也没算满）</td>
+              <td>访存浪费 → 引入 tiling</td>
+            </tr>
+            <tr>
+              <td><strong>v2 Shared Memory Tiling</strong></td>
+              <td>32×32 tile 进 shared memory，block 内复用</td>
+              <td>~8</td>
+              <td>~25 TFLOP/s</td>
+              <td>斜线下方，离 ridge I*=20 还有距离</td>
+              <td>仍 memory-bound → 增大 tile</td>
+            </tr>
+            <tr>
+              <td><strong>v3 Register Tiling</strong></td>
+              <td>每线程算 8×8 micro-tile，寄存器累积</td>
+              <td>~50</td>
+              <td>~50 TFLOP/s</td>
+              <td>跨过 ridge，但低于 π=67</td>
+              <td>开始 compute-bound → Tensor Core</td>
+            </tr>
+            <tr>
+              <td><strong>v4 Tensor Core (BF16)</strong></td>
+              <td>用 <span class="mono">wmma</span> / <span class="mono">mma</span>，BF16 输入 FP32 累加</td>
+              <td>~200 (BF16 bytes 减半)</td>
+              <td>~600 TFLOP/s</td>
+              <td>BF16 屋顶 π=989 下方 60%</td>
+              <td>kernel 调度 / pipeline / L2</td>
+            </tr>
+            <tr>
+              <td><strong>v5 Cutlass-style</strong></td>
+              <td>double buffer + async copy + warp specialization</td>
+              <td>~280</td>
+              <td>~850 TFLOP/s</td>
+              <td>接近 BF16 屋顶 86%</td>
+              <td>已接近理论极限</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="highlight" style="margin-top:14px;">
+        <strong>关键模式：</strong>每次 AI 跳跃都是<strong>数据复用</strong>带来的（tiled in shared memory → tiled in register → tensor core fragment）；每次 P 跳跃都是<strong>切到更高 π 的 ceil</strong>（CUDA Core → Tensor Core）。这就是为什么 LLM kernel 优化本质是"沿着 roofline 爬"——<strong>先把 AI 推过 ridge，再切到更高 π 的 ceil</strong>。
+      </div>
+    </section>
+
+    <section id="interview" class="summary">
+      <h2>面试要点速记</h2>
+      <p>以下问题是 NVIDIA / DeepSeek / 字节等公司 LLM-infra 面试的高频考点：</p>
+      <ul>
+        <li><strong>什么是 Roofline Model？</strong>用 min(π, β·I) 给出 kernel 理论性能上限。π 是峰值算力，β 是显存带宽，I 是算术强度。</li>
+        <li><strong>Ridge Point 怎么算？</strong>I* = π/β。AI 小于 I* 是 memory-bound，大于 I* 才可能 compute-bound。<strong>不同 dtype 的 π 不同，ridge point 也不同</strong>。</li>
+        <li><strong>如何判断 kernel 是 memory-bound？</strong>实测 AI &lt; I*，或 ncu 显示 <span class="mono">dram__throughput</span> 接近 100% 而 <span class="mono">sm__throughput</span> 低。</li>
+        <li><strong>点离屋顶很远说明什么？</strong>不是带宽或算力瓶颈，可能是 latency-bound、occupancy 不足、寄存器溢出、bank conflict、同步开销。看 stall reasons。</li>
+        <li><strong>如何提高 AI？</strong>shared memory tiling、register tiling、kernel fusion（避免中间结果写回 HBM）、改变算法（如 FlashAttention 的 online softmax）。</li>
+        <li><strong>Roofline 的局限？</strong>不看 latency、不区分指令类型（默认 FMA）、不显示 cache 层级（需 hierarchical roofline）、不反映系统级瓶颈（需 Nsight Systems）。</li>
+        <li><strong>LLM 推理为什么 decode 几乎总是 memory-bound？</strong>每生成 1 token 需读 KV cache（O(N·d) bytes）但只做 O(d²) 计算，AI 极低。Prefill 是批量 GEMM，AI 高，通常 compute-bound。这是<strong>连续批处理 / paged attention / chunked prefill</strong> 等系统设计的根本原因。</li>
+        <li><strong>FlashAttention 为什么快？</strong>不是降低了 FLOPs，而是通过 tiling + online softmax 把 attention 的 HBM 流量从 O(N²d) 降到 O(N²)，AI 提升数倍，把 memory-bound 的 kernel 推到接近 ridge。这是<strong>用算法换 AI</strong> 的经典案例。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">Roofline Model · 进阶版 · GPU 性能优化学习笔记</div>
+  </footer>
+
+  <script>
+    const presets = {
+      h100:   { pc: 67,   bw: 3.35, label: '67 TFLOP/s (FP32)' },
+      h100tc: { pc: 989,  bw: 3.35, label: '989 TFLOP/s (FP16 TC)' },
+      a100:   { pc: 19.5, bw: 2.0,  label: '19.5 TFLOP/s (FP32)' },
+      '4090': { pc: 82.6, bw: 1.01, label: '82.6 TFLOP/s (FP32)' },
+    };
+
+    const kernels = [
+      { name: 'Elementwise',     ai: 0.17, eff: 0.85, color: '#ff6b8a', desc: 'y = αx + y' },
+      { name: 'Reduction',       ai: 0.25, eff: 0.75, color: '#ff9f70', desc: 'Σx' },
+      { name: 'LayerNorm',       ai: 0.40, eff: 0.55, color: '#ffe066', desc: 'per-token normalize' },
+      { name: 'Softmax',         ai: 0.25, eff: 0.50, color: '#ffd166', desc: '3-pass naive' },
+      { name: 'Stencil 7-pt',    ai: 0.22, eff: 0.65, color: '#5cc8ff', desc: '3D 7-point' },
+      { name: 'GEMM N=1024',     ai: 170,  eff: 0.55, color: '#86efac', desc: 'tiled FP32' },
+      { name: 'GEMM N=4096',     ai: 683,  eff: 0.80, color: '#45ffd2', desc: 'tiled FP32' },
+      { name: 'Attention naive', ai: 5,    eff: 0.30, color: '#a78bfa', desc: 'd=64, N=512' },
+    ];
+
+    const peakCompute = document.getElementById('peakCompute');
+    const bandwidth = document.getElementById('bandwidth');
+    const peakComputeText = document.getElementById('peakComputeText');
+    const bandwidthText = document.getElementById('bandwidthText');
+    const ridgeHint = document.getElementById('ridgeHint');
+    const dynamicChart = document.getElementById('dynamicChart');
+    const presetRow = document.getElementById('presetRow');
+    const tbody = document.querySelector('#kernelTable tbody');
+    let activeKernel = null;
+
+    function fmt(x, digits = 1) {
+      if (x >= 1000) return (x / 1000).toFixed(2) + 'k';
+      if (x >= 100) return x.toFixed(0);
+      if (x >= 10) return x.toFixed(1);
+      if (x >= 1) return x.toFixed(2);
+      return x.toFixed(digits);
+    }
+
+    function logMap(v, minV, maxV, minPx, maxPx) {
+      const lv = Math.log10(Math.max(minV, v));
+      const lmin = Math.log10(minV);
+      const lmax = Math.log10(maxV);
+      return minPx + (lv - lmin) / (lmax - lmin) * (maxPx - minPx);
+    }
+
+    function buildTable() {
+      tbody.innerHTML = kernels.map((k, i) => {
+        const pc = Number(peakCompute.value);
+        const bw = Number(bandwidth.value);
+        const ridge = pc / bw;
+        const attain = Math.min(pc, k.ai * bw);
+        const achieved = attain * k.eff;
+        const bound = k.ai < ridge ? 'Memory' : 'Compute';
+        const tagCls = k.ai < ridge ? 'mem' : 'comp';
+        return `<tr class="krow" data-idx="${i}">
+          <td><strong style="color:${k.color}">${k.name}</strong><br/><span style="color:#7d93ad;font-size:12px">${k.desc}</span></td>
+          <td><span class="mono">${fmt(k.ai)}</span></td>
+          <td><span class="mono">${fmt(attain)} TFLOP/s</span><br/><span style="color:#7d93ad;font-size:12px">(实测 ${fmt(achieved)})</span></td>
+          <td><span class="tag ${tagCls}">${bound}</span></td>
+          <td style="color:#9fb4cf;font-size:13px">${bound === 'Memory' ? '需提高复用 / 减少访存' : '需提高指令吞吐 / TC 利用率'}</td>
+        </tr>`;
+      }).join('');
+
+      Array.from(tbody.querySelectorAll('.krow')).forEach((row) => {
+        row.addEventListener('click', () => {
+          const idx = Number(row.dataset.idx);
+          activeKernel = (activeKernel === idx) ? null : idx;
+          Array.from(tbody.querySelectorAll('.krow')).forEach(r => r.classList.remove('active'));
+          if (activeKernel !== null) row.classList.add('active');
+          draw();
+        });
+      });
+    }
+
+    function draw() {
+      const pc = Number(peakCompute.value);
+      const bw = Number(bandwidth.value);
+      const ridge = pc / bw;
+
+      peakComputeText.textContent = presets[currentPreset]?.label || `${fmt(pc, 0)} TFLOP/s`;
+      bandwidthText.textContent = `${fmt(bw)} TB/s`;
+      ridgeHint.textContent = `Ridge Point I* = π/β = ${fmt(ridge)} FLOPs/Byte`;
+
+      const minAI = 0.05, maxAI = 2000;
+      const minPerf = 0.05, maxPerf = Math.max(2000, pc * 1.6);
+      const x0 = 90, x1 = 770, y0 = 470, y1 = 50;
+
+      const xRidge = logMap(Math.max(minAI, Math.min(maxAI, ridge)), minAI, maxAI, x0, x1);
+      const yPeak = y0 - (Math.log10(pc) - Math.log10(minPerf)) / (Math.log10(maxPerf) - Math.log10(minPerf)) * (y0 - y1);
+
+      const yStartPerf = minAI * bw;
+      const yStart = y0 - (Math.log10(Math.max(minPerf, yStartPerf)) - Math.log10(minPerf)) / (Math.log10(maxPerf) - Math.log10(minPerf)) * (y0 - y1);
+      const xStart = x0 + 8;
+
+      const xTicks = [0.1, 1, 10, 100, 1000];
+      const yTicksNice = [];
+      for (let p = -1; p <= Math.ceil(Math.log10(maxPerf)); p++) {
+        yTicksNice.push(Math.pow(10, p));
+      }
+      const yTickVals = [1, 10, 100, 1000, 10000];
+
+      let gridX = '', gridY = '', labelsX = '', labelsY = '';
+      xTicks.forEach(t => {
+        if (t < minAI || t > maxAI) return;
+        const x = logMap(t, minAI, maxAI, x0, x1);
+        gridX += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y0}" stroke="rgba(255,255,255,.08)"/>`;
+        labelsX += `<text x="${x}" y="${y0 + 22}" fill="#9fb4cf" font-size="12" text-anchor="middle">${t < 1 ? t : (t >= 1000 ? (t/1000)+'k' : t)}</text>`;
+      });
+      yTickVals.forEach(t => {
+        if (t < minPerf || t > maxPerf) return;
+        const y = y0 - (Math.log10(t) - Math.log10(minPerf)) / (Math.log10(maxPerf) - Math.log10(minPerf)) * (y0 - y1);
+        gridY += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="rgba(255,255,255,.08)"/>`;
+        labelsY += `<text x="${x0 - 10}" y="${y + 4}" fill="#9fb4cf" font-size="12" text-anchor="end">${t >= 1000 ? (t/1000)+'k' : t}</text>`;
+      });
+
+      let kernelDots = '';
+      let kernelAnnotations = '';
+      kernels.forEach((k, i) => {
+        const attain = Math.min(pc, k.ai * bw);
+        const achieved = attain * k.eff;
+        const xK = logMap(Math.max(minAI, Math.min(maxAI, k.ai)), minAI, maxAI, x0, x1);
+        const yK = y0 - (Math.log10(Math.max(minPerf, achieved)) - Math.log10(minPerf)) / (Math.log10(maxPerf) - Math.log10(minPerf)) * (y0 - y1);
+        const yRoof = y0 - (Math.log10(Math.max(minPerf, attain)) - Math.log10(minPerf)) / (Math.log10(maxPerf) - Math.log10(minPerf)) * (y0 - y1);
+        const isActive = activeKernel === i;
+        const r = isActive ? 11 : 7;
+        kernelDots += `<line x1="${xK}" y1="${yK}" x2="${xK}" y2="${yRoof}" stroke="${k.color}" stroke-width="${isActive ? 2.5 : 1.5}" stroke-dasharray="4 4" opacity="${isActive ? 0.9 : 0.4}"/>`;
+        kernelDots += `<circle cx="${xK}" cy="${yK}" r="${r}" fill="${k.color}" stroke="#05111e" stroke-width="2" filter="url(#dynGlow)"/>`;
+        if (isActive) {
+          kernelDots += `<circle cx="${xK}" cy="${yRoof}" r="5" fill="none" stroke="${k.color}" stroke-width="2"/>`;
+          kernelAnnotations = `
+            <rect x="${Math.min(x1 - 200, xK + 14)}" y="${Math.max(y1, yK - 60)}" width="186" height="50" rx="10" fill="rgba(5,13,25,.92)" stroke="${k.color}" stroke-width="1.5"/>
+            <text x="${Math.min(x1 - 200, xK + 14) + 10}" y="${Math.max(y1 + 18, yK - 42)}" fill="${k.color}" font-size="13" font-weight="900">${k.name}</text>
+            <text x="${Math.min(x1 - 200, xK + 14) + 10}" y="${Math.max(y1 + 36, yK - 24)}" fill="#dceeff" font-size="11">实测 ${fmt(achieved)} TFLOP/s · gap ${((1-k.eff)*100).toFixed(0)}%</text>
+          `;
+        }
+      });
+
+      dynamicChart.innerHTML = `
+        <defs>
+          <linearGradient id="dynRoof" x1="0" x2="1"><stop offset="0%" stop-color="#45ffd2"/><stop offset="65%" stop-color="#5cc8ff"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
+          <filter id="dynGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <rect x="0" y="0" width="820" height="540" rx="22" fill="rgba(5,13,25,.35)"/>
+        <g>${gridX}${gridY}</g>
+        <g stroke="#cfe7ff" stroke-width="2"><line x1="${x0}" y1="${y0}" x2="${x1 + 12}" y2="${y0}"/><line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1 - 8}"/></g>
+        <g>${labelsX}${labelsY}</g>
+        <text x="${(x0 + x1) / 2}" y="${y0 + 50}" fill="#cfe7ff" text-anchor="middle" font-size="14" font-weight="700">Arithmetic Intensity  FLOPs / Byte  (log)</text>
+        <text x="22" y="${(y0 + y1) / 2}" fill="#cfe7ff" text-anchor="middle" font-size="14" font-weight="700" transform="rotate(-90 22 ${(y0 + y1) / 2})">Performance  TFLOP/s  (log)</text>
+
+        <path d="M${xStart} ${yStart} L${xRidge} ${yPeak} L${x1} ${yPeak}" stroke="url(#dynRoof)" stroke-width="6" fill="none" filter="url(#dynGlow)" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="${xRidge}" y1="${yPeak}" x2="${xRidge}" y2="${y0}" stroke="rgba(255,188,117,.7)" stroke-dasharray="8 7" stroke-width="2"/>
+        <circle cx="${xRidge}" cy="${yPeak}" r="6" fill="#ffbc75" filter="url(#dynGlow)"/>
+        <text x="${xRidge}" y="${Math.max(y1 + 6, yPeak - 14)}" fill="#ffbc75" font-size="12" font-weight="900" text-anchor="middle">Ridge I*=${fmt(ridge)}</text>
+        <text x="${x1 - 8}" y="${yPeak - 12}" fill="#a78bfa" font-size="13" font-weight="900" text-anchor="end">Peak π=${fmt(pc)} TFLOP/s</text>
+        <text x="${xStart + 4}" y="${yStart - 8}" fill="#45ffd2" font-size="12" font-weight="900">β=${fmt(bw)} TB/s</text>
+
+        ${kernelDots}
+        ${kernelAnnotations}
+      `;
+
+      buildTable();
+    }
+
+    let currentPreset = 'h100';
+    presetRow.querySelectorAll('.toggle').forEach(t => {
+      t.addEventListener('click', () => {
+        const key = t.dataset.preset;
+        const p = presets[key];
+        if (!p) return;
+        currentPreset = key;
+        presetRow.querySelectorAll('.toggle').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        peakCompute.value = p.pc;
+        bandwidth.value = p.bw;
+        draw();
+      });
+    });
+
+    [peakCompute, bandwidth].forEach(el => {
+      el.addEventListener('input', () => {
+        currentPreset = null;
+        presetRow.querySelectorAll('.toggle').forEach(x => x.classList.remove('active'));
+        draw();
+      });
+    });
+
+    draw();
+  </script>
+</body>
+</html>

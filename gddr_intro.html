@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDDR、DDR 与 HBM 关系简明介绍</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: rgba(15, 30, 53, 0.9);
+      --card: rgba(255, 255, 255, 0.06);
+      --line: rgba(177, 210, 255, 0.18);
+      --text: #edf6ff;
+      --muted: #aebfd5;
+      --blue: #5cc8ff;
+      --cyan: #45ffd2;
+      --purple: #a78bfa;
+      --orange: #ffbc75;
+      --red: #ff6b8a;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 8%, rgba(92, 200, 255, 0.22), transparent 28rem),
+        radial-gradient(circle at 86% 12%, rgba(167, 139, 250, 0.22), transparent 26rem),
+        radial-gradient(circle at 70% 88%, rgba(69, 255, 210, 0.12), transparent 24rem),
+        var(--bg);
+      line-height: 1.72;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    strong { color: #fff; }
+
+    .container {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(14px);
+      background: rgba(7, 17, 31, 0.78);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav {
+      min-height: 66px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 850;
+      letter-spacing: .2px;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #05111e;
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      box-shadow: 0 0 30px rgba(69, 255, 210, .28);
+    }
+
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    nav a {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 7px 10px;
+      border-radius: 999px;
+    }
+
+    nav a:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, .08);
+    }
+
+    .hero {
+      padding: 68px 0 36px;
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 34px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      color: #bdf8ff;
+      background: rgba(92, 200, 255, .09);
+      border: 1px solid rgba(92, 200, 255, .28);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 14px var(--cyan);
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: clamp(38px, 5.8vw, 70px);
+      line-height: 1.06;
+      letter-spacing: -2px;
+    }
+
+    .gradient-text {
+      background: linear-gradient(100deg, #fff, #9ee9ff 36%, #78ffdf 68%, #d7c7ff);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 780px;
+      font-size: clamp(17px, 2vw, 20px);
+      color: #c7d9ed;
+    }
+
+    .hero-note {
+      margin-top: 20px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      color: #ffe6c8;
+      background: rgba(255, 188, 117, .10);
+      border: 1px solid rgba(255, 188, 117, .26);
+    }
+
+    .memory-map {
+      min-height: 390px;
+      border-radius: 28px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
+      border: 1px solid var(--line);
+      box-shadow: 0 28px 80px rgba(0,0,0,.34);
+    }
+
+    .map-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .chip-scene {
+      position: relative;
+      height: 420px;
+      border-radius: 22px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(92,200,255,.09) 1px, transparent 1px),
+        linear-gradient(rgba(69,255,210,.08) 1px, transparent 1px),
+        rgba(5, 13, 25, .58);
+      background-size: 28px 28px;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .node {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.07);
+      box-shadow: 0 16px 40px rgba(0,0,0,.28);
+      font-weight: 800;
+    }
+
+    .cpu { left: 7%; top: 40px; width: 23%; height: 82px; border-color: rgba(92,200,255,.42); }
+    .ddr { left: 38%; top: 52px; width: 25%; height: 62px; border-color: rgba(92,200,255,.34); color: #dff7ff; }
+    .gpu { left: 10%; top: 178px; width: 25%; height: 92px; border-color: rgba(69,255,210,.42); }
+    .gddr { right: 8%; width: 23%; height: 46px; border-color: rgba(69,255,210,.36); color: #d9fff7; font-size: 14px; }
+    .g1 { top: 148px; }
+    .g2 { top: 204px; }
+    .g3 { top: 260px; }
+
+    .hbm-package {
+      position: absolute;
+      left: 7%;
+      right: 7%;
+      bottom: 24px;
+      width: auto;
+      height: 88px;
+      border-radius: 20px;
+      border: 1px solid rgba(167,139,250,.36);
+      background: rgba(167,139,250,.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+    }
+
+    .accelerator {
+      width: 128px;
+      height: 58px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(167,139,250,.38);
+      font-weight: 850;
+    }
+
+    .stack {
+      width: 96px;
+      height: 64px;
+      position: relative;
+    }
+
+    .layer {
+      position: absolute;
+      left: 0;
+      width: 96px;
+      height: 16px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, rgba(167,139,250,.95), rgba(92,200,255,.85));
+      border: 1px solid rgba(255,255,255,.22);
+      box-shadow: 0 10px 22px rgba(0,0,0,.24);
+    }
+    .l1 { top: 0; }
+    .l2 { top: 13px; opacity: .88; }
+    .l3 { top: 26px; opacity: .76; }
+    .l4 { top: 39px; opacity: .64; }
+
+    .label {
+      position: absolute;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .label-ddr { left: 7%; top: 132px; white-space: normal; width: 56%; }
+    .label-gddr { right: 8%; top: 314px; white-space: normal; width: 44%; text-align: right; }
+    .label-hbm { left: 8%; bottom: 4px; color: #dacfff; }
+
+    .line {
+      position: absolute;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      box-shadow: 0 0 12px rgba(69,255,210,.55);
+      transform-origin: left center;
+    }
+    .line-ddr { left: 30%; top: 83px; width: 8%; background: linear-gradient(90deg, var(--blue), transparent); }
+    .line-gddr-1 { left: 36%; top: 191px; width: 34%; transform: rotate(-16deg); }
+    .line-gddr-2 { left: 36%; top: 226px; width: 34%; }
+    .line-gddr-3 { left: 36%; top: 260px; width: 34%; transform: rotate(16deg); }
+
+    main { padding-bottom: 62px; }
+    section { margin: 30px 0; }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(27px, 4vw, 40px);
+      line-height: 1.18;
+      letter-spacing: -1px;
+    }
+
+    .section-head p {
+      max-width: 560px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .grid { display: grid; gap: 18px; }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+    .card {
+      padding: 22px;
+      border-radius: 24px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 55px rgba(0,0,0,.20);
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 21px;
+    }
+
+    .card p { margin: 0; color: #c6d7ea; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 30px;
+      min-width: 30px;
+      padding: 0 8px;
+      border-radius: 10px;
+      background: rgba(92,200,255,.14);
+      color: #adf0ff;
+      border: 1px solid rgba(92,200,255,.24);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .badge.purple {
+      color: #dfd5ff;
+      background: rgba(167,139,250,.16);
+      border-color: rgba(167,139,250,.28);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255,255,255,.04);
+    }
+
+    table {
+      width: 100%;
+      min-width: 780px;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 15px 16px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+
+    th {
+      color: #e5f8ff;
+      font-size: 14px;
+      background: rgba(92,200,255,.10);
+    }
+
+    td { color: #c6d7ea; }
+    tr:last-child td { border-bottom: none; }
+
+    .highlight {
+      border-left: 4px solid var(--purple);
+      background: rgba(167,139,250,.10);
+      padding: 18px 20px;
+      border-radius: 18px;
+      color: #e7ddff;
+    }
+
+    .formula {
+      margin-top: 14px;
+      padding: 18px;
+      border-radius: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: rgba(5, 13, 25, .70);
+      border: 1px solid rgba(92,200,255,.18);
+      color: #dff8ff;
+      overflow-x: auto;
+    }
+
+    .formula .hl { color: var(--cyan); }
+
+    .summary {
+      padding: 26px;
+      border-radius: 28px;
+      border: 1px solid rgba(69,255,210,.24);
+      background: linear-gradient(135deg, rgba(69,255,210,.14), rgba(92,200,255,.07));
+    }
+
+    .summary h2 { margin-bottom: 12px; }
+    .summary p { color: #d2ecf2; margin: 0; font-size: 18px; }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 0 38px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; padding-top: 42px; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 10px; }
+      .cols-3, .cols-2 { grid-template-columns: 1fr; }
+      .nav { flex-direction: column; align-items: flex-start; padding: 14px 0; }
+      nav { justify-content: flex-start; }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 24px, 1120px); }
+      .memory-map { padding: 14px; }
+      .chip-scene { height: 470px; }
+      .cpu { left: 24px; top: 34px; }
+      .ddr { left: 168px; top: 46px; }
+      .line-ddr { left: 136px; top: 78px; width: 34px; }
+      .gpu { left: 24px; right: auto; top: 172px; }
+      .gddr { right: 24px; }
+      .g1 { top: 142px; }
+      .g2 { top: 206px; }
+      .g3 { top: 270px; }
+      .line-gddr-1, .line-gddr-2, .line-gddr-3 { display: none; }
+      .hbm-package { left: 24px; right: 24px; bottom: 24px; width: auto; gap: 12px; }
+      .label-ddr, .label-gddr, .label-hbm { display: none; }
+      h1 { letter-spacing: -1.2px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <a class="brand" href="#top">
+        <span class="brand-mark">G</span>
+        <span>GDDR / DDR / HBM</span>
+      </a>
+      <nav aria-label="页面导航">
+        <a href="#relationship">三者关系</a>
+        <a href="#compare">核心对比</a>
+        <a href="#gddr">GDDR 定位</a>
+        <a href="#speed">速度对比</a>
+        <a href="#summary">总结</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <section class="hero">
+      <div>
+        <div class="eyebrow"><span class="dot"></span> 存储芯片简明科普</div>
+        <h1><span class="gradient-text">GDDR</span> 与 DDR、HBM 的关系</h1>
+        <p class="lead">
+          <strong>GDDR 全称 Graphics Double Data Rate SDRAM</strong>，中文常译为“图形双倍数据率同步动态随机存储器”，也就是显卡上常说的显存。GDDR、DDR、HBM 都属于 <strong>DRAM 动态随机存储器</strong>，断电都会丢数据；它们的核心区别不是“存不存得住”，而是分别为 <strong>CPU、GPU、AI/HPC 加速器</strong> 的不同访问模式做了取舍。
+        </p>
+        <div class="hero-note">
+          最重要的一点：<strong>HBM 采用 3D 堆叠技术</strong>，把多层 DRAM 芯片垂直堆起来，并通过 TSV/硅中介层等先进封装与 GPU/加速器连接，因此能提供极高带宽和更好的能效。
+        </div>
+      </div>
+
+      <aside class="memory-map" aria-label="DDR GDDR HBM 关系示意图">
+        <div class="map-title">
+          <span>连接方式示意</span>
+          <span>DDR → CPU ｜ GDDR → GPU ｜ HBM → 堆叠同封装</span>
+        </div>
+        <div class="chip-scene">
+          <div class="node cpu">CPU</div>
+          <div class="line line-ddr"></div>
+          <div class="node ddr">DDR<br><small>主内存</small></div>
+          <div class="label label-ddr">通用内存，重视容量与延迟</div>
+
+          <div class="node gpu">GPU</div>
+          <div class="line line-gddr-1"></div>
+          <div class="line line-gddr-2"></div>
+          <div class="line line-gddr-3"></div>
+          <div class="node gddr g1">GDDR</div>
+          <div class="node gddr g2">GDDR</div>
+          <div class="node gddr g3">GDDR</div>
+          <div class="label label-gddr">多颗颗粒围绕 GPU，提升显存带宽</div>
+
+          <div class="hbm-package">
+            <div class="accelerator">GPU<br><small>Package</small></div>
+            <div class="stack" aria-label="HBM 堆叠">
+              <div class="layer l1"></div>
+              <div class="layer l2"></div>
+              <div class="layer l3"></div>
+              <div class="layer l4"></div>
+            </div>
+          </div>
+          <div class="label label-hbm">HBM：多层 DRAM 垂直堆叠，同封装超宽接口</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="relationship">
+      <div class="section-head">
+        <h2>1. 三者是什么关系？</h2>
+        <p>可以把它们理解成 DRAM 的三条分支：DDR 偏 CPU 通用内存，GDDR 偏 GPU 显存，HBM 偏高端加速器的堆叠高带宽内存。</p>
+      </div>
+      <div class="grid cols-3">
+        <article class="card">
+          <h3><span class="badge">DDR</span> CPU 主内存</h3>
+          <p>常见于电脑内存条，如 DDR4/DDR5。它追求容量、通用性和较低随机访问延迟，适合 CPU 复杂、零散的访问模式。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge">GDDR</span> GPU 显存</h3>
+          <p>Graphics DDR，常见于显卡。它牺牲一些延迟表现，换取更高带宽，适合 GPU 大量线程同时读取纹理、矩阵和图形数据。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge purple">HBM</span> 堆叠显存</h3>
+          <p>High Bandwidth Memory。它把多层 DRAM die 垂直堆叠，通过 TSV 和先进封装靠近 GPU，特点是超宽总线、高带宽、低能耗/bit。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="compare">
+      <div class="section-head">
+        <h2>2. DDR、GDDR、HBM 核心对比</h2>
+        <p>这张表保留最关键的差异，避免陷入过多代际参数。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>DDR</th>
+              <th>GDDR</th>
+              <th>HBM</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>主要用途</strong></td>
+              <td>CPU 主内存，运行操作系统和通用程序。</td>
+              <td>GPU 显存，服务图形渲染、游戏、CUDA/AI 推理等。</td>
+              <td>高端 GPU/AI/HPC 加速器显存，服务大模型训练、高性能计算。</td>
+            </tr>
+            <tr>
+              <td><strong>设计重点</strong></td>
+              <td>容量、低延迟、可升级、通用生态。</td>
+              <td>高带宽、成本适中、适合板卡布局。</td>
+              <td>极高带宽、低功耗/bit、高封装密度。</td>
+            </tr>
+            <tr>
+              <td><strong>物理形态</strong></td>
+              <td>内存条 DIMM/SO-DIMM，或板载内存。</td>
+              <td>多颗 BGA 显存颗粒焊在显卡 PCB 上，围绕 GPU。</td>
+              <td><strong>多层 DRAM 垂直堆叠</strong>，通常与 GPU/加速器同封装。</td>
+            </tr>
+            <tr>
+              <td><strong>带宽来源</strong></td>
+              <td>依靠内存通道数量和 DDR 速率。</td>
+              <td>依靠较高 pin 速率 + 多颗颗粒并联形成宽总线。</td>
+              <td>依靠 3D 堆叠后的超宽 I/O，总线位宽通常远大于 GDDR。</td>
+            </tr>
+            <tr>
+              <td><strong>成本/难度</strong></td>
+              <td>成熟、便宜、容易扩容。</td>
+              <td>成本高于普通 DDR，但低于 HBM。</td>
+              <td>需要 TSV、堆叠、中介层/先进封装，成本和制造难度最高。</td>
+            </tr>
+            <tr>
+              <td><strong>一句话</strong></td>
+              <td>CPU 的主工作台。</td>
+              <td>GPU 的高速显存仓库。</td>
+              <td>高端加速器旁边的堆叠超高速内存。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>3. 为什么 HBM 的“堆叠”很关键？</h2>
+        <p>HBM 不只是“更快的 GDDR”，它的核心变化是封装和连接方式。</p>
+      </div>
+      <div class="grid cols-2">
+        <article class="card">
+          <h3><span class="badge purple">Stack</span> 垂直堆叠</h3>
+          <p>HBM 把多层 DRAM 芯片像楼层一样叠起来，每层之间用 TSV（Through-Silicon Via，硅通孔）连接。这样能在很小面积内放下更多存储和更多 I/O。</p>
+        </article>
+        <article class="card">
+          <h3><span class="badge purple">Wide I/O</span> 超宽接口</h3>
+          <p>GDDR 更像“高速公路车速很快”；HBM 更像“车道数极多”。HBM 通过超宽总线并行传输数据，所以带宽和能效都非常强。</p>
+        </article>
+      </div>
+      <div class="highlight" style="margin-top:18px;">
+        <strong>简化理解：</strong>DDR 插在 CPU 旁边，GDDR 平铺在 GPU 周围，HBM 则是<strong>堆叠起来并贴近 GPU/加速器封装内部</strong>。因此 HBM 常用于 NVIDIA H100/H200、AMD Instinct 等高端 AI/HPC 芯片，而普通游戏显卡更多使用 GDDR。
+      </div>
+    </section>
+
+    <section id="gddr">
+      <div class="section-head">
+        <h2>4. GDDR 的定位</h2>
+        <p>GDDR 是 DDR 思路在图形和并行计算场景下的特化版本。</p>
+      </div>
+      <div class="grid cols-2">
+        <article class="card">
+          <h3><span class="badge">优势</span> 带宽/成本平衡</h3>
+          <p>GDDR 可以通过多颗显存颗粒并联，把显卡总线扩展到 128/192/256/384-bit 等宽度，从而提供数百 GB/s 到 1 TB/s 级别的显存带宽，成本又明显低于 HBM。</p>
+          <div class="formula">
+            理论带宽 ≈ <span class="hl">每引脚数据速率</span> × <span class="hl">总线位宽</span> ÷ 8
+          </div>
+        </article>
+        <article class="card">
+          <h3><span class="badge">局限</span> 不如 HBM 紧凑</h3>
+          <p>GDDR 颗粒平铺在 PCB 上，需要高速走线，功耗和面积压力更大；HBM 因为堆叠和同封装，能在更短距离内提供更宽数据通道，但价格更高。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="summary" class="summary">
+      <h2>一句话总结</h2>
+      <p>
+        <strong>DDR</strong> 是 CPU 的通用主内存；<strong>GDDR</strong> 是 GPU 常用的高带宽显存；<strong>HBM</strong> 是采用 3D 堆叠和先进封装的高带宽内存，带宽/能效最强但成本最高。三者都是 DRAM，只是面向不同计算场景做了不同工程取舍。
+      </p>
+    </section>
+
+    <section id="speed">
+      <div class="section-head">
+        <h2>5. 访问速度对比：典型值</h2>
+        <p>这里的“速度”主要看<strong>带宽</strong>，因为 GPU/AI 场景最关心单位时间能搬多少数据；延迟只给出大致倾向，实际会随平台、频率、控制器和访问模式变化。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>类型</th>
+              <th>常见规格示例</th>
+              <th>典型带宽</th>
+              <th>访问延迟倾向</th>
+              <th>怎么理解</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>DDR5</strong></td>
+              <td>DDR5-5600 / DDR5-6400，CPU 双通道或服务器多通道</td>
+              <td>桌面双通道约 <strong>90–100 GB/s</strong>；服务器多通道可到数百 GB/s</td>
+              <td>约 <strong>60–100 ns</strong> 量级，偏低延迟</td>
+              <td>适合 CPU 随机、零散、通用访问。</td>
+            </tr>
+            <tr>
+              <td><strong>GDDR6 / GDDR6X / GDDR7</strong></td>
+              <td>显卡上多颗颗粒并联，常见 128/192/256/384-bit 总线</td>
+              <td>常见约 <strong>300–1000+ GB/s</strong>；新一代高端 GDDR7 显卡可继续提升</td>
+              <td>从 GPU 视角通常是<strong>数百 ns</strong>量级，但可被大量线程隐藏</td>
+              <td>适合 GPU 大规模并行、连续数据访问，重点是高带宽。</td>
+            </tr>
+            <tr>
+              <td><strong>HBM2E / HBM3 / HBM3E</strong></td>
+              <td>多层 DRAM 垂直堆叠，多个 HBM Stack 与 GPU/加速器同封装</td>
+              <td>单个堆栈约<strong>数百 GB/s 到 1 TB/s+</strong>；整卡/整加速器常见 <strong>3–5 TB/s+</strong></td>
+              <td>延迟不只由 DRAM 决定，但因距离近、接口宽，能效和吞吐最强</td>
+              <td>适合 AI 训练、HPC、大模型等极端带宽需求。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="highlight" style="margin-top:18px;">
+        <strong>简单排序：</strong>如果看总带宽，通常是 <strong>HBM ＞ GDDR ＞ DDR</strong>；如果看通用 CPU 随机访问延迟，DDR 更有优势。也就是说，三者不是简单谁“全面更快”，而是各自服务不同处理器和应用场景。
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">GDDR、DDR 与 HBM 关系简明介绍 · 存储芯片学习笔记</div>
+  </footer>
+</body>
+</html>
